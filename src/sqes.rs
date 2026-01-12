@@ -92,25 +92,45 @@ fn create_ctrl_cmd_sqe(
     UringCmd80::new(fd, op).cmd(serialize(cmd)).build()
 }
 
-fn submit_and_wait(ring: &mut Ring128, sqe: Entry128) -> Result<Entry32> {
-    unsafe { ring.submission().push(&sqe)? };
+fn submit_and_wait(ring: &mut Ring128, sqe: Entry128) -> Result<i32> {
+    fn inner(ring: &mut Ring128, sqe: &Entry128) -> Result<Entry32> {
+        unsafe { ring.submission().push(sqe)? };
 
-    let timespec = Timespec::new().sec(5);
-    let args = SubmitArgs::new().timespec(&timespec);
+        let timespec = Timespec::new().sec(5);
+        let args = SubmitArgs::new().timespec(&timespec);
 
-    match ring.submitter().submit_with_args(1, &args) {
-        Ok(_) => {
-            if let Some(cqe) = ring.completion().next() {
-                return Ok(cqe);
+        match ring.submitter().submit_with_args(1, &args) {
+            Ok(_) => {
+                if let Some(cqe) = ring.completion().next() {
+                    return Ok(cqe);
+                }
+
+                bail!(
+                    "Failed to receive response from the driver in time."
+                );
             }
-
-            bail!("Failed to receive response from the driver in time.");
-        }
-        Err(err) => {
-            let err: anyhow::Error = err.into();
-            bail!(err.context("Got an error while waiting for response."));
+            Err(err) => {
+                let err: anyhow::Error = err.into();
+                bail!(
+                    err.context(
+                        "Got an error while waiting for response."
+                    )
+                );
+            }
         }
     }
+
+    for _ in 0..10 {
+        let result = inner(ring, &sqe)?.result();
+
+        if result == -libc::EINTR {
+            continue;
+        }
+
+        return Ok(result);
+    }
+
+    Ok(-libc::EINTR)
 }
 
 pub fn send_add_dev_cmd(
@@ -127,7 +147,7 @@ pub fn send_add_dev_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, UBLK_U_CMD_ADD_DEV, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(AddResult::NewDevice(dev_info)),
         // EEXIST
         -17 => Ok(AddResult::AttemptRecovery),
@@ -154,7 +174,7 @@ pub fn send_get_info_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, UBLK_U_CMD_GET_DEV_INFO, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(unsafe { dev_info.assume_init() }),
         res => bail!(
             "Got an error while trying to get info about the device. Err: {}",
@@ -175,7 +195,7 @@ pub fn send_start_recovery_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, UBLK_U_CMD_START_USER_RECOVERY, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(()),
         res => bail!(
             "Got an error while trying to start recovery. Err: {}",
@@ -199,7 +219,7 @@ pub fn send_set_params_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, UBLK_U_CMD_SET_PARAMS, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(()),
         res => {
             bail!("Got unexpected result when setting parameters: {}", res)
@@ -228,7 +248,7 @@ pub fn send_start_recover_dev_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, cmd_op, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(()),
         res => {
             bail!("Got unexpected result when starting device: {}", res)
@@ -248,7 +268,7 @@ pub fn send_stop_dev_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, UBLK_U_CMD_STOP_DEV, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(()),
         res => {
             bail!("Got unexpected result when stopping device: {}", res)
@@ -268,7 +288,7 @@ pub fn send_del_dev_cmd(
     };
     let sqe = create_ctrl_cmd_sqe(fd, UBLK_U_CMD_DEL_DEV_ASYNC, cmd);
 
-    match submit_and_wait(ring, sqe)?.result() {
+    match submit_and_wait(ring, sqe)? {
         0 => Ok(()),
         res => {
             bail!("Got unexpected result when deleting device: {}", res)
