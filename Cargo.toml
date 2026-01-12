@@ -1,0 +1,14 @@
+[package]
+name = "blkchnkr"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0.100"
+io-uring = "0.7.10"
+nix = { version = "0.30.1", features = ["feature", "fs", "ioctl", "mman", "resource", "signal", "user"] }
+smallvec = { version = "1.15.1", default-features = false }
+
+[features]
+debug = []
