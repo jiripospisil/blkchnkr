@@ -201,7 +201,9 @@ pub fn send_set_params_cmd(
 
     match submit_and_wait(ring, sqe)?.result() {
         0 => Ok(()),
-        res => bail!("Unexpected result: {}", res),
+        res => {
+            bail!("Got unexpected result when setting parameters: {}", res)
+        }
     }
 }
 
@@ -228,7 +230,9 @@ pub fn send_start_recover_dev_cmd(
 
     match submit_and_wait(ring, sqe)?.result() {
         0 => Ok(()),
-        res => bail!("Unexpected result: {}", res),
+        res => {
+            bail!("Got unexpected result when starting device: {}", res)
+        }
     }
 }
 
@@ -246,7 +250,9 @@ pub fn send_stop_dev_cmd(
 
     match submit_and_wait(ring, sqe)?.result() {
         0 => Ok(()),
-        res => bail!("Unexpected result: {}", res),
+        res => {
+            bail!("Got unexpected result when stopping device: {}", res)
+        }
     }
 }
 
@@ -264,7 +270,9 @@ pub fn send_del_dev_cmd(
 
     match submit_and_wait(ring, sqe)?.result() {
         0 => Ok(()),
-        res => bail!("Unexpected result: {}", res),
+        res => {
+            bail!("Got unexpected result when deleting device: {}", res)
+        }
     }
 }
 
