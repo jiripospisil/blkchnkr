@@ -6,6 +6,7 @@ use std::time::Duration;
 use std::{env, io};
 
 use anyhow::{Context, Result, bail};
+use caps::{CapSet, Capability};
 use io_uring::opcode::PollAdd;
 use io_uring::types::{Fd, Fixed};
 use nix::libc;
@@ -36,6 +37,21 @@ use crate::util::set_fsids;
 
 const UBLK_CONTROL_FD_IDX: Fixed = Fixed(0);
 
+fn check_admin() -> Result<()> {
+    let is_admin =
+        !caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_ADMIN)
+            .unwrap_or(false);
+
+    if is_admin {
+        bail!(
+            "Running without CAP_SYS_ADMIN (~as a non-root user) is not \
+            supported yet."
+        );
+    }
+
+    Ok(())
+}
+
 fn set_io_flusher() {
     const PR_SET_IO_FLUSHER: libc::c_int = 57;
 
@@ -43,10 +59,8 @@ fn set_io_flusher() {
         let err: anyhow::Error = io::Error::last_os_error().into();
 
         warn!(
-            "Unable to set PR_SET_IO_FLUSHER for the process. This *may* \
-            lead to deadlocks in very low memory situations. Grant blkchnkr \
-            the CAP_SYS_RESOURCE capability or run it as root (~CAP_SYS_ADMIN). Or \
-            just never run out of memory. Err: {}",
+            "Unable to set PR_SET_IO_FLUSHER for the process. This may \
+            lead to deadlocks in very low memory situations. Err: {}",
             err
         );
     }
@@ -311,6 +325,8 @@ fn join_worker_threads(worker_threads: Box<[JoinHandle<()>]>) {
 
 pub fn run(start: Start) -> Result<()> {
     info!("Starting up (v{})", env!("CARGO_PKG_VERSION"));
+
+    check_admin()?;
 
     let mut config = Config::from_repository(start.repository)?;
 
