@@ -5,7 +5,7 @@ Status: It compiled.
 Blkchnkr is a ublk server which creates a block device backed by an on demand
 allocated files.
 
-```bash
+```
 $ blkchnkr init -r /tmp/repository --dev-id 42 --size 1t
 [INFO]	Created a new repository at /tmp/repository
 
